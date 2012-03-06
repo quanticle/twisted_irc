@@ -4,11 +4,15 @@ from twisted .internet import reactor
 from twisted.internet.endpoints import TCP4ClientEndpoint
 from datetime import datetime
 import re
+
+from weather import Weather
+
 class HelloBot(irc.IRCClient):
-    def __init__(self, factory):
+    def __init__(self, factory, weather_provider):
         self.nickname = factory.bot_nickname
         self.channel = factory.bot_channel
-        self.commands = ['hello', 'time']
+        self.weather_provider = weather_provider
+        self.commands = ['hello', 'time', 'weather']
         
     def signedOn(self):
         self.setNick(self.nickname)
@@ -32,7 +36,7 @@ class HelloBot(irc.IRCClient):
         command_regexp = "%s.*\\s*(?P<command> .*)" % (self.nickname,)
         match = re.match(command_regexp, command_str)
         if match:
-            given_command = match.group("command").strip()
+            given_command = match.group("command").strip().lower()
             for accepted_command in self.commands:
                 if given_command == accepted_command:
                     return accepted_command
@@ -53,7 +57,10 @@ class HelloBot(irc.IRCClient):
 
     def time(self):
         return str(datetime.now())
-
+    
+    def weather(self):
+        f, c, cond = self.weather_provider.get_weather_data()
+        return str("Temp: %s (%s C); Condtions: %s" % (f, c, cond))
             
     
 class BotFactory(Factory):
@@ -62,7 +69,8 @@ class BotFactory(Factory):
         self.bot_channel = channel
         
     def buildProtocol(self, addr):
-        return HelloBot(self)
+        weather_provider = Weather("http://www.google.com/ig/api?weather=Minneapolis")
+        return HelloBot(self, weather_provider)
 
 if __name__ == "__main__":
     endpoint = TCP4ClientEndpoint(reactor, "chat.freenode.net", 6667)
