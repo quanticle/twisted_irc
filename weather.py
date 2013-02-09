@@ -2,44 +2,42 @@ import requests
 from xml.dom import minidom
 from datetime import datetime
 from datetime import timedelta
+from weather_secret import API_KEY #This is API key for the weather underground API
+from pprint import pprint #DEBUG
 
 class Weather:
-    def __init__(self, weather_url):
-        self.url = weather_url
-        self.timeout = timedelta(0, 300) #Expire cache every 5 minutes
-        self.timestamp = None #No timestamp means that we haven't fetched anything yet
-        self.weather_data = None #This is the xml.dom.minidom where we cache our weather data
-        
-    def get_weather_data(self):
-        if self.timestamp == None or datetime.now() > self.timestamp + self.timeout:
-            self.weather_doc = self.fetch_weather_data()
-            self.timestamp = datetime.now()
-        degrees_f = self.parse_farenheit()
-        degrees_c = self.parse_celcius()
-        current_conditions = self.parse_conditions()
-        return degrees_f, degrees_c, current_conditions
-
-    def fetch_weather_data(self):
-        r = requests.get(self.url)
-        if r.status_code == 200:
-            self.weather_data = minidom.parseString(r.text)
-            if len(self.weather_data.getElementsByTagName("weather")[0].getElementsByTagName("current_conditions")) < 1:
-                #No current conditions returned; this is not the data we're looking for
-                raise Exception("Invalid weather data")
-        else:
-            raise Exception("Could not retrieve weather data")
-
-    def parse_farenheit(self):
-        return self._get_temperature_node("temp_f").getAttribute("data")
-
-    def parse_celcius(self):
-        return self._get_temperature_node("temp_c").getAttribute("data")
-
-    def parse_conditions(self):
-        return self.weather_data.getElementsByTagName("weather")[0].getElementsByTagName("current_conditions")[0].getElementsByTagName("condition")[0].getAttribute("data")
+    def __init__(self):
+        self.query_cache = {}
+        self.ttl = timedelta(minutes=5)
     
+    def get_weather(self, query):
+        if not (query in self.query_cache) or (self.query_cache[query].timestamp < (datetime.now() - self.ttl)):
+            self.fetch_weather(query)
+        if isinstance(self.query_cache[query], Observation): 
+            return "Conditions at %s: %s, %s" % (self.query_cache[query].location, self.query_cache[query].conditions, self.query_cache[query].temperature)
+        else:
+            return self.query_cache[query]
 
-    def _get_temperature_node(self, temperature_tag_name):
-        return self.weather_data.getElementsByTagName("weather")[0].getElementsByTagName("current_conditions")[0].getElementsByTagName(temperature_tag_name)[0]
+    def fetch_weather(self, query):
+        print "Fetching weather for:" #DEBUG
+        pprint(query) #DEBUG
+        autocomplete_results = requests.get("http://autocomplete.wunderground.com/aq", params={"query": query,  "h": 0}).json()
+        if len(autocomplete_results['RESULTS']) > 0:
+            new_observation = Observation(str(autocomplete_results['RESULTS'][0]['name']), autocomplete_results['RESULTS'][0]['l'])
+            weather_data = requests.get("http://api.wunderground.com/api/%s/conditions%s.json" % (API_KEY, new_observation.link)).json()
+            new_observation.temperature = weather_data['current_observation']['temperature_string']
+            new_observation.conditions = weather_data['current_observation']['icon']
+            self.query_cache[query] = new_observation
+        else:
+            self.query_cache[query] = "No results found for %s" % query
+
+class Observation:
+    def __init__(self, name, wunderground_link):
+        self.location = name,
+        self.link = wunderground_link
+        self.temperature = ""
+        self.conditions = ""
+        self.timestamp = datetime.now()
+
 
     
