@@ -4,6 +4,8 @@ from twisted .internet import reactor
 from twisted.internet.endpoints import TCP4ClientEndpoint
 from datetime import datetime
 import re
+import json
+import bot_config
 
 from weather import Weather
 
@@ -12,7 +14,10 @@ class HelloBot(irc.IRCClient):
         self.nickname = factory.bot_nickname
         self.channel = factory.bot_channel
         self.weather_provider = weather_provider
-        self.commands = ['hello', 'time', 'weather']
+        language_file = open("language_codes.json", 'r')
+        self.language_cache = json.load(language_file)
+        language_file.close()
+        self.commands = ['hello', 'time', 'weather', 'language']
         
     def signedOn(self):
         self.setNick(self.nickname)
@@ -56,7 +61,7 @@ class HelloBot(irc.IRCClient):
                     if args:
                         args = args.strip()
                     return accepted_command, args
-            return (None, None)
+            return ("meow", None)
         else: #We should never get here, because of the filtering done in the privmsg event handler
             print "We should never get here!" #DEBUG
             return (None, None)
@@ -81,6 +86,15 @@ class HelloBot(irc.IRCClient):
             return weather_string
         else:
             return "You must provide a city name or zip code"
+
+    def language(self, language_code, *args):
+        if language_code in self.language_cache:
+            return "%s is %s" % (language_code, self.language_cache[language_code]['name'])
+        else:
+            return "I do not know which language %s is." % language_code
+    
+    def meow(self, *args):
+        return "meooooowww"
             
     
 class BotFactory(Factory):
@@ -94,8 +108,8 @@ class BotFactory(Factory):
 
 if __name__ == "__main__":
     endpoint = TCP4ClientEndpoint(reactor, "chat.freenode.net", 6667)
-    d = endpoint.connect(BotFactory("quanticle_bot", "##quanticle"))
+    d = endpoint.connect(BotFactory(bot_config.bot_name, bot_config.bot_channel))
     reactor.run()
-
+    
         
 
