@@ -14,7 +14,9 @@ class Weather:
         if not (query in self.query_cache) or (self.query_cache[query].timestamp < (datetime.now() - self.ttl)):
             self.fetch_weather(query)
         if isinstance(self.query_cache[query], Observation): 
-            return "Conditions at %s: %s, %s" % (self.query_cache[query].location, self.query_cache[query].conditions, self.query_cache[query].temperature)
+            return "Conditions at %s: %s, %s" % (self.query_cache[query].location, 
+                                                 self.query_cache[query].conditions, 
+                                                 self.query_cache[query].temperature)
         else:
             return self.query_cache[query]
 
