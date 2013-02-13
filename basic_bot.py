@@ -37,6 +37,11 @@ class HelloBot(irc.IRCClient):
             command, args = self.parseCommand(msg, False)
             if command:
                 self.sendReply(recipient, "%s: %s" % (self.parseNickname(sender), self.executeCommand(command, args)))
+        else:
+            #Not a command, so parse for wikilinks
+            links = self.parseWikilinks(msg)
+            if len(links) > 0:
+                self.sendReply(recipient, " ".join(links))
 
     def parseNickname(self, sender):
         """ Parses the nickname from the nickname!hostmask string that the server sends as the sender"""
@@ -95,6 +100,13 @@ class HelloBot(irc.IRCClient):
     
     def meow(self, *args):
         return "meooooowww"
+
+    def parseWikilinks(self, msg):
+        wikilink_pattern = r'\[\[(?P<link_text>[^\]|]+[^ \]|])[\]| ]'
+        wikilinks = re.findall(wikilink_pattern, msg)
+        links = ["http://en.wikipedia.org/wiki/" + wikilink.replace(" ", "_") for wikilink in wikilinks]
+        return links
+            
             
     
 class BotFactory(Factory):
