@@ -6,6 +6,8 @@ from datetime import datetime
 import re
 import json
 import bot_config
+import requests
+from xml.dom import minidom
 
 from weather import Weather
 
@@ -18,6 +20,9 @@ class HelloBot(irc.IRCClient):
         self.language_cache = json.load(language_file)
         language_file.close()
         self.commands = ['hello', 'time', 'weather', 'language']
+        self.inlineRegexes = {r'\[\[(?P<data>[^\]|]+[^ \]|])[\]| ]': "wikilink",
+                              r'watch\S+v=(?P<data>[^/&]+)': "youtubeLink",
+                              r'youtu\.be/(?P<data>[^/?&]+)': "youtubeLink"}
         
     def signedOn(self):
         self.setNick(self.nickname)
@@ -25,58 +30,65 @@ class HelloBot(irc.IRCClient):
         print "Bot online with nickname: %s" % (self.nickname,) #DEBUG    
 
     def privmsg(self, sender, recipient, msg):
-        print "Sender: %s\nRecipient: %s\nMessage received: %s\n" % (sender, recipient, msg) #DEBUG
-        command = None
         if recipient == self.nickname:
-            command, args = self.parseCommand(msg, True)
-            if command:
-                self.sendReply(self.parseNickname(sender), self.executeCommand(command, args))
-            else:
-                self.sendReply(self.parseNickname(sender), "Invalid command")
-        elif (recipient == self.channel and msg.startswith(self.nickname)):
-            command, args = self.parseCommand(msg, False)
-            if command:
-                self.sendReply(recipient, "%s: %s" % (self.parseNickname(sender), self.executeCommand(command, args)))
+            replyTo = self.parseNickname(sender)
+            commandResults = self.parseDirectCommand(msg)
+            self.sendReply(replyTo, commandResults)
+        elif msg.startswith(self.nickname):
+            replyTo = self.channel
+            commandResults = self.parseDirectCommand(msg, addressTo=self.parseNickname(sender))
+            self.sendReply(replyTo, commandResults)
         else:
-            #Not a command, so parse for wikilinks
-            links = self.parseWikilinks(msg)
-            if len(links) > 0:
-                self.sendReply(recipient, " ".join(links))
+            replyTo = self.channel
+            commandResults = self.parseInlineCommand(msg)
+            for result in commandResults:
+                self.sendReply(replyTo, result)
+    
+    def parseDirectCommand(self, msg, addressTo=None):
+        commandRegex = r'(%s.\s+)?(?P<command>\S+)\s*(?P<args>.*)' % self.nickname
+        match = re.match(commandRegex, msg)
+        if match:
+            commandOutput = ""
+            givenCommand = match.group("command").strip()
+            acceptedCommand = [availableCommand for availableCommand in self.commands if availableCommand == givenCommand]
+            if acceptedCommand:
+                args = match.group("args")
+                commandOutput = self.executeCommand(acceptedCommand[0], args)
+            else:
+                commandOutput = self.executeCommand("meow", None)
+            if addressTo:
+                return "%s: %s" % (addressTo, commandOutput)
+            else:
+                return commandOutput
+        else:
+            print "Invalid msg sent to parseDirectCommand: %s" % msg
+            return None
 
+    def parseInlineCommand(self, msg):
+        commandOutput = []
+        for commandRegex in self.inlineRegexes:
+            match = re.findall(commandRegex, msg)
+            if match:
+                command = self.inlineRegexes[commandRegex]
+                output = self.executeCommand(command, match)
+                if isinstance(output, list):
+                    for item in output:
+                        commandOutput.append(item)
+                else:
+                    commandOutput.append(output)
+        return commandOutput
+            
     def parseNickname(self, sender):
         """ Parses the nickname from the nickname!hostmask string that the server sends as the sender"""
         return sender[:sender.find("!")]
-
-    def parseCommand(self, command_str, pm):
-        print "Command string: %s, PM: %s" % (command_str, str(pm)) #DEBUG
-        if pm:
-            command_regexp = r'(?P<command>\S+)\s*(?P<args>.*)' 
-            print "Command regexp: %s" % command_regexp #DEBUG
-        else:
-            command_regexp = "%s.?\\s*(?P<command>\\S+)\\s*(?P<args>.*)" % self.nickname
-            print "Command regexp %s" % command_regexp #DEBUG
-        match = re.match(command_regexp, command_str)
-        if match:
-            given_command = match.group("command").strip().lower()
-            print "Command %s" % given_command #DEBUG
-            for accepted_command in self.commands:
-                if given_command == accepted_command:
-                    args = match.group("args")
-                    print "Args: %s" % str(args)
-                    if args:
-                        args = args.strip()
-                    return accepted_command, args
-            return ("meow", None)
-        else: #We should never get here, because of the filtering done in the privmsg event handler
-            print "We should never get here!" #DEBUG
-            return (None, None)
 
     def executeCommand(self, command, args):
         command_method = getattr(self, command)
         return command_method(args)
 
     def sendReply(self, recipient, message):
-        self.msg(recipient, str(message))
+        if message:
+            self.msg(recipient, str(message))
        
     def hello(self, *args):
         """This is a basic command that just returns \"hello there\""""
@@ -101,12 +113,21 @@ class HelloBot(irc.IRCClient):
     def meow(self, *args):
         return "meooooowww"
 
-    def parseWikilinks(self, msg):
-        wikilink_pattern = r'\[\[(?P<link_text>[^\]|]+[^ \]|])[\]| ]'
-        wikilinks = re.findall(wikilink_pattern, msg)
-        links = ["http://en.wikipedia.org/wiki/" + wikilink.replace(" ", "_") for wikilink in wikilinks]
+    def wikilink(self, linkTexts):
+        links = ["http://en.wikipedia.org/wiki/" + wikilink.replace(" ", "_") for wikilink in linkTexts]
         return links
-            
+    
+    def youtubeLink(self, videoIds):
+        return [self.getVideoTitle(video) for video in videoIds]
+
+    def getVideoTitle(self, videoId):
+        videoResponse = requests.get("http://gdata.youtube.com/feeds/api/videos/%s?v=2" % videoId)
+        if videoResponse.status_code == 200:
+            videoData = minidom.parseString(videoResponse.text.encode('utf-8'))
+            title = videoData.getElementsByTagName("title")[0].firstChild.data
+            return title
+        else:
+            return "Video not found"
             
     
 class BotFactory(Factory):
@@ -119,7 +140,7 @@ class BotFactory(Factory):
         return HelloBot(self, weather_provider)
 
 if __name__ == "__main__":
-    endpoint = TCP4ClientEndpoint(reactor, "chat.freenode.net", 6667)
+    endpoint = TCP4ClientEndpoint(reactor, bot_config.server, 6667)
     d = endpoint.connect(BotFactory(bot_config.bot_name, bot_config.bot_channel))
     reactor.run()
     

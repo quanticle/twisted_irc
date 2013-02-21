@@ -1,7 +1,2 @@
-This is a very simple IRC bot written to show off Twisted. It has three
-commands: hello, time, and weather. Hello just returns a trivial "Hello there!"
-response. Time returns the local time of the bot. Weather, returns the current
-conditions at Minneapolis, as reported by Google weather.
-
-Dependencies:
-requests (http://docs.python-requests.org)
+This is an IRC bot written for one of my freenode channels. Configuration
+parameters are supplied by bot_config.py. 
