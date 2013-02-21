@@ -13,12 +13,7 @@ class Weather:
     def get_weather(self, query):
         if not (query in self.query_cache) or (self.query_cache[query].timestamp < (datetime.now() - self.ttl)):
             self.fetch_weather(query)
-        if isinstance(self.query_cache[query], Observation): 
-            return "Conditions at %s: %s, %s" % (self.query_cache[query].location, 
-                                                 self.query_cache[query].conditions, 
-                                                 self.query_cache[query].temperature)
-        else:
-            return self.query_cache[query]
+        return str(self.query_cache[query])
 
     def fetch_weather(self, query):
         print "Fetching weather for:" #DEBUG
@@ -31,7 +26,8 @@ class Weather:
             new_observation.conditions = weather_data['current_observation']['icon']
             self.query_cache[query] = new_observation
         else:
-            self.query_cache[query] = "No results found for %s" % query
+            self.query_cache[query] = Observation(query, "")
+            self.query_cache[query].invalid = True
 
 class Observation:
     def __init__(self, name, wunderground_link):
@@ -40,6 +36,13 @@ class Observation:
         self.temperature = ""
         self.conditions = ""
         self.timestamp = datetime.now()
-
-
+        self.invalid = False
+    
+    def __str__(self):
+        if not self.invalid:
+            return "Conditions at %s: %s, %s" % (self.location, 
+                                                 self.conditions, 
+                                                 self.temperature)
+        else:
+            return "No results found for %s" % self.location
     
