@@ -7,6 +7,7 @@ import re
 import json
 import bot_config
 import requests
+import codecs
 from xml.dom import minidom
 
 from weather import Weather
@@ -88,10 +89,14 @@ class HelloBot(irc.IRCClient):
 
     def sendReply(self, recipient, message):
         if message:
-            self.msg(recipient, str(message))
+            codec = codecs.lookup('utf-8')
+            encoded_string, errors = codec.encode(message)
+            self.msg(recipient, encoded_string)
        
     def hello(self, *args):
-        """This is a basic command that just returns \"hello there\""""
+        """
+        This is a basic command that just returns \"hello there\"
+        """
         return "Hello there."
 
     def time(self, *args):

@@ -1,3 +1,4 @@
 *.pyc
 *~
 weather_secret.py
+bot_config.py
