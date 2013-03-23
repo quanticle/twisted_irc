@@ -22,8 +22,8 @@ class HelloBot(irc.IRCClient):
         language_file.close()
         self.commands = ['hello', 'time', 'weather', 'language']
         self.inlineRegexes = {r'\[\[(?P<data>[^\]|]+[^ \]|])[\]| ]': "wikilink",
-                              r'watch\S+v=(?P<data>[^/&]+)': "youtubeLink",
-                              r'youtu\.be/(?P<data>[^/?&]+)': "youtubeLink"}
+                              r'watch\S+v=(?P<data>[^/& ]+)': "youtubeLink",
+                              r'youtu\.be/(?P<data>[^/?& ]+)': "youtubeLink"}
         
     def signedOn(self):
         self.setNick(self.nickname)
